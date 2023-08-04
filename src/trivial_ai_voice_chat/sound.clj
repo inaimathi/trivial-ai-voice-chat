@@ -33,6 +33,9 @@
        (filter -command-exists?)
        first))
 
+(when (not (-find-command "rec"))
+  (throw (Exception. "You must install the `rec` command. You can do this by installing the `sox` package, available in `guix`, `brew` or `apt`")))
+
 (defn => [command args]
   (apply shell/sh (-find-command command) args))
 
@@ -54,9 +57,10 @@
         cmd (if voice [spk "-v" voice] [spk])]
     (apply shell/sh (conj cmd text))))
 
-(defn speak-to-mp3 [text & {:keys [out voice lib] :or {lib DEFAULT-SPEAK-LIB}}]
+(defn speak-to-mp3 [text & {:keys [out dir voice lib] :or {lib DEFAULT-SPEAK-LIB}}]
   (let [spk (-find-command (name lib))
-        cmd (atom [spk])]
+        cmd (atom [spk])
+        dir (new java.io.File (or dir "."))]
     (when voice
       (swap! cmd #(vec (concat % ["-v" voice]))))
     (let [tmp (java.io.File/createTempFile
@@ -64,15 +68,12 @@
                (case lib
                  :say ".aiff"
                  ".wav")
-               (new java.io.File "."))
-          out (or out (.getPath (java.io.File/createTempFile
-                                 "spoken" ".mp3" (new java.io.File "."))))]
-      (println "TMPED" @cmd tmp out)
+               dir)
+          out (or out (.getPath (java.io.File/createTempFile "spoken" ".mp3" dir)))]
       (case lib
         :say (swap! cmd #(vec (concat % ["-o" (.getPath tmp)])))
         :espeak (swap! cmd #(vec (concat % ["-w" (.getPath tmp)]))))
-      (println "CMDED" (conj @cmd text))
-      (apply shell/sh (conj @cmd text))
+
       (=> "lame" ["-m" "m" (.getPath tmp) out])
       (.delete tmp)
       out)))
@@ -81,8 +82,8 @@
   (=> "mplayer" [file "-speed" (str speed)])
   nil)
 
-(defn record-until-silence [& {:keys [out silence-size] :or {silence-size 1.0}}]
-  (let [file (or out (.getPath (java.io.File/createTempFile "recorded" ".wav" (new java.io.File "."))))
+(defn record-until-silence [& {:keys [out dir silence-size] :or {silence-size 1.0}}]
+  (let [file (or out (.getPath (java.io.File/createTempFile "recorded" ".wav" (new java.io.File (or dir ".")))))
         res (=>
              "rec" [file
                   "vad" ;; trim silence from the beginning of voice detection
