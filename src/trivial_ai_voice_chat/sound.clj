@@ -74,6 +74,7 @@
         :say (swap! cmd #(vec (concat % ["-o" (.getPath tmp)])))
         :espeak (swap! cmd #(vec (concat % ["-w" (.getPath tmp)]))))
 
+      (apply shell/sh (conj @cmd text))
       (=> "lame" ["-m" "m" (.getPath tmp) out])
       (.delete tmp)
       out)))
